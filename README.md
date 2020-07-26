@@ -3,7 +3,7 @@
 ## Description
 An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity using the stretching method. See Nishida et al. (2020) for details.
 
-*Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
+* Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
 
 ## Files 
 * Kalmanfilter.py: An implementation of the extended Kalman filter/smoother
