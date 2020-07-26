@@ -1,4 +1,4 @@
-#An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity
+# An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity
 
 ## Description
 An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity using the stretching method. See Nishida et al. (2020) for details.
