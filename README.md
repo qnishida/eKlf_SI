@@ -1,15 +1,14 @@
-# Kirishima
-# Imprementation of Extended Kalman filter for the streching method
+#An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity
 
 ## Description
-An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity using the streching method. See Nishida et al (2020) for details.
+An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity using the stretching method. See Nishida et al. (2020) for details.
 
 *Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
 
 ## Files 
-* Kalmanfilter.py: An implementation of the extended Kalman filter
+* Kalmanfilter.py: An implementation of the extended Kalman filter/smoother
 * gwl_ebino_seikei.dat: The precipitation data (AMeDAS) at Ebino station. 
-* est_param_with_quake.py: A sample python code for estimating temporal variations of the seismic velocities. 
+* est_param_with_quake.py: A sample python code for estimating temporal variations of the seismic velocities. This code also estimates the hyper-parameters using Maximum Likelihood Method.
 
 ## Data format of the precipitation data at Ebino (gwl_ebino_seikei.dat)
 YY/MM/DD, YYYY, MM, DD, Precipitation(mm), Days from 4/30 2010 (1 means the 1st day of seismic data on 5/1 2010)
