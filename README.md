@@ -16,7 +16,7 @@ YY/MM/DD, YYYY, MM, DD, Precipitation(mm), Days from 4/30 2010 (1 means the 1st 
 In situ precipitation observations were obtained from the Automated Meteorological Data Acquisition System (AMeDAS) of the Japan Meteorological Agency (JMA) are available at http://www.data.jma.go.jp/obd/stats/etrn/index.php (in Japanese).
 
 ## Data format of cross-correlation functions (CCFs)
-The CCFs are stored in HDF5 format. The header includes the station locations, date, station elevation, the sampling interval, number of points, and the components. The file will be available at zenodo (6GB). 
+The CCFs are stored in HDF5 format. The header includes the station locations, date, station elevation, the sampling interval, number of points, and the components. The file will be available at zenodo (6Gb). 
 * long-STS-2_bp0.10to0.40white.h5
 
 
