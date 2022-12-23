@@ -14,7 +14,9 @@ class Klf:
             if int(lines[i].split()[5]) == 1: 
                 Klf.num0 = i
         Klf.precipitation -= Klf.precipitation.mean()
-        Klf.q_ref = np.array([1E-6,1E-9,100.,6.726449064255413e-07,-5.,1E-3,-1E-3,30.])
+        #Klf.q_ref = np.array([1E-6,1E-9,100.,6.726449064255413e-07,-5.,1E-3,-1E-3,30.])
+        #Klf.q_ref = np.array([1E-4,4E-8,100.,6.726449064255413e-07,-5.,1E-3,-1E-3,30.])
+        Klf.q_ref = np.array([1E-5,4E-9,100.,6.726449064255413e-07,-5.,1E-3,-1E-3,30.])
         
     # The initial guess for the explanatory variable of the Kumamoto earthquake.
     # We assumed that an exponential type response.
@@ -82,7 +84,9 @@ class Klf:
     # [Input] ccfs1: observed CCFs
     #         ccf_r: the reference CCF 
     # [Output] a prior data covariance h0
-    def est_h0(ccfs1,ccf_r):
+    def est_h0(ccfs1,ccf_r,ts,te):
+        mask0 = [False]*1024
+        for i in range(ts,te): mask0[i+512] , mask0[512-i] = True, True
         h0 = 0.
         for row in range(3):
             for col in range(3):
@@ -90,11 +94,12 @@ class Klf:
                 #Calc. of reference the CCF
                 mccfs = np.ma.masked_array(ccfs,np.isnan(ccfs))
                 ccf_r[row][col] = mccfs.mean(axis=0)
-                scale = ccfs.dot(ccf_r[row][col])/ccf_r[row][col].dot(ccf_r[row][col])
+                scale = ccfs[:,mask0].dot(ccf_r[row][col][mask0])/ccf_r[row][col][mask0].dot(ccf_r[row][col][mask0])
                 mask = (scale>0.5) & (scale <5.)
+                h0 += np.mean(((mccfs[mask])[:,mask0]- ccf_r[row][col][mask0])**2)
                 mccfs[mask] = np.diag(1./scale[mask]) @  np.array(mccfs[mask])
                 ccf_r[row][col] = mccfs[mask].mean(axis=0)
-                h0 += np.mean((mccfs[mask]- ccf_r[row][col])**2)
+                #h0 += np.mean(((mccfs[mask])[:,mask0]- ccf_r[row][col][mask0])**2)
         h0 /= 9.
         return(h0)
    
@@ -178,7 +183,8 @@ class Klf:
             λ = np.linalg.eig(Z2 @ Pt)[0]
             lnL1 = np.log(λ[0]+h0)+np.log(λ[1]+h0)+((te-ts)*2*9-2)*np.log(h0)
             lnL2 = h0*v2-γ.T @ (np.linalg.inv(Z2/h0 +np.linalg.inv(Pt))) @ γ
-            lnL += -(lnL1+lnL2)/2
+            #print("Likelihood ",lnL1,lnL2,lnL2*h0**-2)
+            lnL += -(lnL1+lnL2*h0**-2)/2
             att[itime] = at + Ξ @ γ # at + Kt @ vt
             Ptt[itime] = Pt - Ξ @ (Z2 @ Pt @ Z2 + h0 * Z2) @ Ξ.T #Pt - Kt@Ft@Kt.T
             at[:] = att[itime]      #Tt=1

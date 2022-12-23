@@ -49,7 +49,7 @@ def likelihood(qm, flag=0,ref=0): #q0[0]: amp, q0[1] = σm^2, q0[2] = τ, q0[3] 
     
     if flag == 0:
         np.set_printoptions(precision=2,linewidth=200)
-        print(q0,lnL-ref,lnL)
+        print(q0,lnL-ref,lnL, flush=True)
         np.set_printoptions(precision=8)
         return(-lnL+ref)
     if flag == 1:
@@ -95,10 +95,12 @@ with h5py.File(file,'r') as h5file:
         β  = np.zeros(len(ccfs1[0][0])+1)
         ave= np.zeros(len(ccfs1[0][0])+1)
         
-        h0 = Klf.est_h0(ccfs1,ccf_r)
+        h0 = Klf.est_h0(ccfs1,ccf_r,ts,te)
         print(h0)
         β.fill(0)
-        αt,Vt,lnL, mask_param = Klf.eKlf(ccfs1,ccf_r,delta,ts,te,β,h0,[1E-6,1E-9])
+        #αt,Vt,lnL, mask_param = Klf.eKlf(ccfs1,ccf_r,delta,ts,te,β,h0,[1E-6,1E-9])
+        #αt,Vt,lnL, mask_param = Klf.eKlf(ccfs1,ccf_r,delta,ts,te,β,h0,[2E-5,4E-8])
+        αt,Vt,lnL, mask_param = Klf.eKlf(ccfs1,ccf_r,delta,ts,te,β,h0,[1E-5,4E-9])
         print("Likelihood = ",lnL)
         #Search for the optimized paramters
 
@@ -118,10 +120,11 @@ with h5py.File(file,'r') as h5file:
         Klf.q_ref[6] = A
         #Klf.q_ref[9] = y_ref
 
+        print("#")
         q_init = [1.,1.,1.,1.,1.,1.,1.,1.]        
         bounds = [[5E-2,2E1],[1E-3,2E1],[0.1,2.],[0.1,2.],[0,2],[-10,10],[1E-3,1E1],[0.1,10]]
         q_est, min, log=optimize.fmin_l_bfgs_b(lambda q_tmp:likelihood([q_tmp[0],q_tmp[1],q_tmp[2],q_tmp[3],q_tmp[4],q_tmp[5],q_tmp[6],q_tmp[7]],ref=lnL)\
-                                               ,q_init,bounds=bounds, approx_grad = True,)#pgtol=1E-6,epsilon=1E-8,iprint=-1
+                                               ,q_init,bounds=bounds, approx_grad = True,epsilon=1E-5,iprint=99,disp=1,factr=100000000)#pgtol=1E-6,epsilon=1E-8,iprint=-1
         print("#",log)
         αt,Vt,lnL, β, mask_param = likelihood(q_est,flag=1)
         αt_all[sta_pair] = αt
