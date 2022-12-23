@@ -19,4 +19,10 @@ In situ precipitation observations were obtained from the Automated Meteorologic
 The CCFs are stored in HDF5 format (6Gb). The header includes the station locations, date, station elevation, the sampling interval, number of points, and the components. The file is available at zenodo (https://doi.org/10.5281/zenodo.2539824). 
 * long-STS-2_bp0.10to0.40white.h5
 
+## Typo of eq. 34 (Nishida et al. 2020)
+* Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
 
+### Error
+![image](https://user-images.githubusercontent.com/10939329/209293501-78138321-8265-4576-9992-581f3b02f117.png)
+### Correction 
+![image](https://user-images.githubusercontent.com/10939329/209293546-cc895e07-582e-4a67-a4c9-3918371e3867.png)
