@@ -132,7 +132,7 @@ class Klf:
         Ptt = np.zeros([len(ccfs_all[0][0]),2,2])
         Vt = np.zeros([len(ccfs_all[0][0]),2,2])
         Qt = np.zeros([2,2])
-        mask_param = np.full([len(ccfs_all[0][0]),3,3], False, dtype=np.bool) 
+        mask_param = np.full([len(ccfs_all[0][0]),3,3], False, dtype=bool) 
             
         itime = 0
 
@@ -198,7 +198,7 @@ class Klf:
         for itime in reversed(range(itmax)):
             Pt1 = Ptt[itime]+Qt
             At = Ptt[itime]*np.linalg.inv(Pt1)
-            αt[itime] = att[itime]+ At @ (αt[itime+1]-att[itime+1])
+            αt[itime] = att[itime]+ At @ (αt[itime+1]-att[itime])
             Vt[itime] = Ptt[itime]+ At @ (Vt[itime+1]-Pt1) @ At.T
                 
         return αt, Vt, lnL, mask_param
