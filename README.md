@@ -3,7 +3,7 @@
 ## Description
 An Implementation of an extended Kalman filter/smoother for time-lapse monitoring of seismic velocity using the stretching method. See Nishida et al. (2020) for details.
 
-* Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
+* Nishida, K., Mizutani, Y., Ichihara, M., & Aoki, Y. (2020). Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry: An extended Kalman filter approach. Journal of Geophysical Research: Solid Earth, 125, e2020JB020180. https://doi.org/10.1029/2020JB020180
 
 ---
 
@@ -53,7 +53,7 @@ The CCFs are stored in HDF5 format (6Gb). The header includes the station locati
 * long-STS-2_bp0.10to0.40white.h5
 
 ## Typo of eq. 34 (Nishida et al. 2020)
-* Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry, Nishida, Kiwamu, Mizutani, Yuta, Ichihara, Mie, Aoki, Yosuke, ESSOAar, https://doi.org/10.1002/essoar.10503078.1 (2020)
+* Nishida, K., Mizutani, Y., Ichihara, M., & Aoki, Y. (2020). Time-lapse monitoring of seismic velocity associated with 2011 Shinmoe-dake eruption using seismic interferometry: An extended Kalman filter approach. Journal of Geophysical Research: Solid Earth, 125, e2020JB020180. https://doi.org/10.1029/2020JB020180
 
 ### Error
 ![image](https://user-images.githubusercontent.com/10939329/209293501-78138321-8265-4576-9992-581f3b02f117.png)
