@@ -26,3 +26,6 @@ Fig/
 # Agent/Environment folders
 .agent/
 .ipynb_checkpoints/
+
+# Archive of legacy scripts (local only)
+legacy/
