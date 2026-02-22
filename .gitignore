@@ -1,0 +1,28 @@
+# Data and large files
+Data/
+*.h5
+*.pickle
+*.dat
+*.dat~
+JMA
+Rain
+
+# OS generated files
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.pyc
+
+# Logs and temporary files
+log/
+
+# Figures and plots
+*.pdf
+*.png
+Fig/
+
+# Agent/Environment folders
+.agent/
+.ipynb_checkpoints/
