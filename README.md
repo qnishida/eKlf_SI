@@ -7,28 +7,24 @@ An Implementation of an extended Kalman filter/smoother for time-lapse monitorin
 
 ---
 
-## New Version (v2.0.1): JAX-Optimized EKF
+## New Version (v2.0.2): JAX-Optimized EKF
 A new version optimized with [JAX](https://github.com/google/jax) is now available. This version provides significant speedups, improved numerical stability, and a more robust optimization strategy.
 
-### Key Improvements (v2.0.1)
-- **FFT Pre-upsampling**: Implements 4x upsampling of reference waveforms to smooth the likelihood surface and stabilize L-BFGS-B convergence.
-- **Hybrid Diagonal Hessian**: Combines JAX automatic differentiation with finite differences to estimate parameter sensitivity efficiently (~25% memory reduction vs. full Hessian).
-- **JAX Acceleration**: Leverages XLA compilation for high-speed hyperparameter optimization.
-- **Two-Step Optimization**: Implements a staged workflow that separately determines noise baselines and physical response parameters to prevent overfitting.
+### Key Improvements (v2.0.2)
+- **Parameter Stabilization**: Fixed initial velocity state ($at_{0, \alpha}$) and precipitation delay ($\delta_{rain}$) to **0.0** to prevent overfitting and ensure physical consistency.
+- **Optimized Initial Uncertainty**: Set initial state covariance ($P_{t|0}$) to **1E-2** to allow rapid convergence from the baseline state.
+- **FFT Pre-upsampling**: Implements 4x upsampling of reference waveforms to smooth the likelihood surface.
+- **Hybrid Diagonal Hessian**: Combines JAX automatic differentiation with finite differences for memory-efficient scaling (~25% reduction).
 
 ### Installation
 ```bash
-pip install jax jaxlib numpy scipy matplotlib h5py
+pip install jax jaxlib numpy scipy matplotlib h5py psutil
 ```
-*Note: For optimal precision, enabling 64-bit support in JAX is highly recommended:*
-```python
-from jax import config
-config.update("jax_enable_x64", True)
-```
+*Note: For optimal precision and memory tracking, enabling 64-bit support in JAX and installing `psutil` is recommended.*
 
 ### Usage (Two-Step Optimization)
-To maintain physical integrity, we recommend the following two-step process:
-1. **Step 1 (Noise Baseline)**: Estimate process noise ($Q_0$) and observation noise ($h_0$) with physical models disabled.
+To maintain physical integrity and computational efficiency, we recommend the following two-step process:
+1. **Step 1 (Noise Baseline)**: Estimate process noise ($Q_0$) and observation noise ($h_0$) with physical models disabled. The initial velocity state ($at_{0, \alpha}$) is fixed to **0.0** with high initial uncertainty to stabilize convergence.
 2. **Step 2 (Physical Parameters)**: Fit physical response models (Precipitation, EQ recovery) while keeping noise parameters fixed.
 
 Refer to `plot_tradeoff_jax.py` for a complete example of this workflow.
