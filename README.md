@@ -7,14 +7,14 @@ An Implementation of an extended Kalman filter/smoother for time-lapse monitorin
 
 ---
 
-## New Version (v2.0): JAX-Optimized EKF
+## New Version (v2.0.1): JAX-Optimized EKF
 A new version optimized with [JAX](https://github.com/google/jax) is now available. This version provides significant speedups, improved numerical stability, and a more robust optimization strategy.
 
-### Key Improvements
-- **JAX Acceleration**: Leverages automatic differentiation and XLA compilation for high-speed hyperparameter optimization.
+### Key Improvements (v2.0.1)
+- **FFT Pre-upsampling**: Implements 4x upsampling of reference waveforms to smooth the likelihood surface and stabilize L-BFGS-B convergence.
+- **Hybrid Diagonal Hessian**: Combines JAX automatic differentiation with finite differences to estimate parameter sensitivity efficiently (~25% memory reduction vs. full Hessian).
+- **JAX Acceleration**: Leverages XLA compilation for high-speed hyperparameter optimization.
 - **Two-Step Optimization**: Implements a staged workflow that separately determines noise baselines and physical response parameters to prevent overfitting.
-- **High-Precision Stretching**: Replaces Taylor-series approximations with direct linear interpolation for more accurate waveform stretching.
-- **Enhanced Stability**: Features Woodbury matrix identity updates and precise eigenvalue calculations.
 
 ### Installation
 ```bash
@@ -39,6 +39,7 @@ Refer to `plot_tradeoff_jax.py` for a complete example of this workflow.
 * `KalmanFilter_jax.py`: The latest JAX-optimized EKF engine.
 * `KalmanFilter_numpy.py`: Equivalent interpolation-based logic implemented using standard NumPy (no JAX dependency).
 * `plot_tradeoff_jax.py`: A comprehensive sample script demonstrating the two-step optimization and result visualization.
+* `Script/test_benchmark.py`: A performance benchmarking script to measure execution time and memory usage.
 * `KalmanFilter.py`: Legacy Taylor-series based implementation (archived in `legacy/`).
 * `gwl_ebino_seikei.dat`: The precipitation data (AMeDAS) at Ebino station. 
 * `est_param_with_quake.py`: Sample code for the legacy implementation.

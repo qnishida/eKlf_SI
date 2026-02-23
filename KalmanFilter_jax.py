@@ -44,13 +44,22 @@ def batch_interp(t_points, xp, fp_3x3):
     return vmap(vmap(lambda f: jnp.interp(t_points, xp, f)))(fp_3x3)
 
 @jit
-def eKlf_jax(ccfs_all, ccf_r, delta, ts, te, β, h0, Q0, Pt_init, at_init):
-    idx = jnp.arange(1024)
-    mask0 = ((idx >= ts + 512) & (idx < te + 512)) | ((idx > 512 - te) & (idx <= 512 - ts))
-    lag_time_full = (jnp.arange(1024) - 512) * delta
+def eKlf_jax(ccfs_all, ccf_r, ccf_deri, ccf_r_orig, delta, ts, te, β, h0, Q0, Pt_init, at_init):
+    """
+    Standard EKF with high-res interpolation support.
+    ccf_r, ccf_deri: Upsampled arrays (e.g., 4096) for precise interpolation.
+    ccf_r_orig: Original resolution array (1024) for outlier detection.
+    """
+    # Masking logic remains based on the original 1024 resolution indices
+    idx_mask = jnp.arange(1024)
+    mask0 = ((idx_mask >= ts + 512) & (idx_mask < te + 512)) | ((idx_mask > 512 - te) & (idx_mask <= 512 - ts))
+    
+    # Grid for interpolation (upsampled)
+    factor = ccf_r.shape[-1] // 1024
+    lag_time_full = (jnp.arange(ccf_r.shape[-1]) - ccf_r.shape[-1]//2) * (delta / factor)
+    
     num_lags_valid = jnp.sum(mask0)
-    ccf_deri = deri_jax(ccf_r, 1, delta)
-    ms_r = jnp.sum(jnp.where(mask0, ccf_r**2, 0.0), axis=-1)
+    ms_r = jnp.sum(jnp.where(mask0, ccf_r_orig**2, 0.0), axis=-1)
     Qt = jnp.diag(jnp.array([Q0[0], Q0[1]]))
     yt_all = jnp.transpose(ccfs_all, (2, 0, 1, 3))
 
@@ -58,16 +67,18 @@ def eKlf_jax(ccfs_all, ccf_r, delta, ts, te, β, h0, Q0, Pt_init, at_init):
         at, Pt, lnL_acc = carry
         yt, β_val = inputs
         A, α = at[0], at[1]
-        t_shifted = lag_time_full * (1.0 + α + β_val)
         
-        # Robust Interpolation-based stretching
+        # Grid for sampling (1024)
+        lag_time_ref = (jnp.arange(1024) - 512) * delta
+        t_shifted = lag_time_ref * (1.0 + α + β_val)
+        
+        # Robust Interpolation on High-Res Grid
         Z0 = batch_interp(t_shifted, lag_time_full, ccf_r)
         Z1_base = batch_interp(t_shifted, lag_time_full, ccf_deri)
-        # Coordinate-corrected sensitivity (Case B)
-        Z1 = A * Z1_base * lag_time_full
+        Z1 = A * Z1_base * lag_time_ref
         
-        # Outlier Rejection
-        dot_product = jnp.sum(jnp.where(mask0, yt * ccf_r, 0.0), axis=-1)
+        # Outlier Rejection (uses ccf_r_orig: 1024)
+        dot_product = jnp.sum(jnp.where(mask0, yt * ccf_r_orig, 0.0), axis=-1)
         scale = dot_product / jnp.where(ms_r > 0.0, ms_r, 1.0)
         outlier_mask = (scale > 0.5) & (scale < 2.0)
         comp_count = jnp.sum(outlier_mask)

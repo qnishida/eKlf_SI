@@ -1,21 +1,23 @@
 import jax
 import jax.numpy as jnp
 from jax import jit, vmap, config, value_and_grad, lax
-from functools import partial
 import numpy as np
 import h5py
-import matplotlib.pyplot as plt
-import matplotlib.dates as mdates
 from scipy import signal, optimize
 import os
 import time
 import datetime
+import psutil
 from KalmanFilter_jax import eKlf_jax, T_jax, est_h0_jax, cal_ref_jax, deri_jax
 
 # Enable float64
 config.update("jax_enable_x64", True)
 
-class KlfTradeoffV17:
+def get_memory_usage():
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / (1024 * 1024)  # Return in MB
+
+class KlfBenchmark:
     def __init__(self, precipitation_path="./Data/gwl_ebino_seikei.dat"):
         with open(precipitation_path, "r") as f:
             lines = f.readlines()
@@ -29,7 +31,6 @@ class KlfTradeoffV17:
 
     def get_beta_extended(self, q_params, num_days):
         T0 = T_jax(jnp.arange(len(self.precipitation), dtype=jnp.float64), q_params[2])
-        # Correct non-circular shift: positive delay means rain effect arrives later
         x_orig = jnp.arange(len(self.precipitation), dtype=jnp.float64)
         y2 = jnp.interp(x_orig - q_params[4], x_orig, self.precipitation, left=0, right=0)
         full_conv = jax.scipy.signal.convolve(y2, T0, mode='full')
@@ -42,7 +43,6 @@ class KlfTradeoffV17:
         return beta_clean + eq_term
 
     def initial_guess_physics(self, ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, h0, num_days):
-        print("Obtaining preliminary physics-based guess (Robust Cross-Correlation LSQ)...")
         alpha_t, _, _, mask = eKlf_jax(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, jnp.zeros(num_days), h0, [1E-5, 1E-8], jnp.diag(jnp.array([1E-5, 1E-8])), jnp.array([1.0, 0.0]))
         raw_alpha = alpha_t[:, 1]
         u0 = signal.detrend(np.array(raw_alpha))
@@ -70,7 +70,7 @@ class KlfTradeoffV17:
         results = [rain_cost_with_delay(t) for t in tau_grid]
         best_idx = np.argmin([r[0] for r in results])
         best_tau = tau_grid[best_idx]
-        best_cost, best_gamma, best_delay = results[best_idx]
+        _, best_gamma, best_delay = results[best_idx]
         best_A_eq, best_tau_eq = 0.0, 30.0
         if num_days > self.t_kmt:
             alpha_eq = u0[self.t_kmt:]
@@ -89,27 +89,23 @@ class KlfTradeoffV17:
         return new_q_ref
 
 def main():
-    freq_band = "0.15to0.90"
-    file_path = "./Data/long-STS-2_bp" + freq_band + "white.h5"
-    klf_inst = KlfTradeoffV17()
+    file_path = "./Data/long-STS-2_bp0.15to0.90white.h5"
+    benchmark_inst = KlfBenchmark()
     
     with h5py.File(file_path, 'r') as h5file:
         delta = (int)(h5file.attrs['delta'] * 1000 + 0.5) / 1000
         ts, te = int(20 / delta), int(100 / delta)
         sta_pair = ("04", "03") 
-        num_days = min(h5file[sta_pair[0]][sta_pair[1]]["ccfs"].shape[2], len(klf_inst.precipitation) - klf_inst.num0)
-        print(f"Using full period: {num_days} days")
+        num_days = min(h5file[sta_pair[0]][sta_pair[1]]["ccfs"].shape[2], len(benchmark_inst.precipitation) - benchmark_inst.num0)
         ccfs1 = jnp.array(h5file[sta_pair[0]][sta_pair[1]]["ccfs"][:, :, :num_days, :])
         win2 = signal.windows.tukey(te - ts, 0.1)
         win = np.zeros(1024)
         for i in range(ts, te): win[i + 512], win[512 - i] = win2[i - ts], win2[i - ts]
         ccfs1 = ccfs1 * jnp.array(win)
         
-        # Initial Reference
         h0_initial, ccf_r_orig = est_h0_jax(ccfs1, None, ts, te)
         
-        # --- 4x Upsampling Pre-processing ---
-        def upsample_data(ref_ccf, delta_val):
+        def upsample_reference(ref_ccf, delta_val):
             factor = 4
             n_orig = ref_ccf.shape[-1]
             n_new = n_orig * factor
@@ -118,24 +114,20 @@ def main():
             deri_dense = signal.resample(deri_orig, n_new, axis=-1).astype(np.float64)
             return ccf_dense, deri_dense
 
-        ccf_r_dense, ccf_deri_dense = upsample_data(ccf_r_orig, delta)
+        ccf_r_dense, ccf_deri_dense = upsample_reference(ccf_r_orig, delta)
 
-        print("Preliminary KLF pass for renormalization...")
-        q_init_lsq = klf_inst.initial_guess_physics(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, h0_initial, num_days)
-        beta_init = klf_inst.get_beta_extended(q_init_lsq, num_days)
+        q_init_lsq = benchmark_inst.initial_guess_physics(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, h0_initial, num_days)
+        beta_init = benchmark_inst.get_beta_extended(q_init_lsq, num_days)
         at_pre, _, _, _ = eKlf_jax(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, beta_init, h0_initial, [q_init_lsq[0], q_init_lsq[1]], jnp.diag(jnp.array([q_init_lsq[0], q_init_lsq[1]])), jnp.array([1.0, 0.0]))
-        
-        print("Updating reference CCF using preliminary results...")
         ccf_r_orig = cal_ref_jax(ccfs1, at_pre, beta_init, delta)
-        ccf_r_dense, ccf_deri_dense = upsample_data(ccf_r_orig, delta)
+        ccf_r_dense, ccf_deri_dense = upsample_reference(ccf_r_orig, delta)
         h0_initial, _ = est_h0_jax(ccfs1, ccf_r_orig, ts, te)
         
-        q_physics_init = klf_inst.initial_guess_physics(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, h0_initial, num_days)
-        print(f"Final Initial Guess:\n{q_physics_init}\nh0: {h0_initial:.4e}")
+        q_physics_init = benchmark_inst.initial_guess_physics(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, h0_initial, num_days)
 
         @jit
         def calc_lnL(q_phys, h0_val):
-            beta = klf_inst.get_beta_extended(q_phys, num_days)
+            beta = benchmark_inst.get_beta_extended(q_phys, num_days)
             Pt_init = jnp.diag(jnp.array([q_phys[0], q_phys[1]]))
             at_init = jnp.array([1.0, q_phys[5]])
             _, _, lnL, _ = eKlf_jax(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, beta, h0_val, [q_phys[0], q_phys[1]], Pt_init, at_init)
@@ -143,11 +135,14 @@ def main():
 
         baseline_lnL = calc_lnL(q_physics_init, h0_initial)
 
-        # --- TWO-STEP OPTIMIZATION ---
-        print("\n--- Starting Two-Step Optimization ---")
-        overall_start = time.time()
-        
+        report = []
+        report.append(f"Benchmark Date: {datetime.datetime.now()}")
+        report.append(f"Model: Linear Interpolation on 4x Upsampled Grid (v2.0.1, Hybrid Hessian AD+FD)")
+        report.append(f"Data: {sta_pair}, {num_days} days")
+        report.append("-" * 40)
+
         # Step 1: Noise Baseline
+        print("Executing Step 1...")
         @jit
         def phi_to_q_step1(phi):
             qr = q_physics_init
@@ -160,14 +155,24 @@ def main():
             q_p, h0_v = phi_to_q_step1(phi)
             return -(calc_lnL(q_p, h0_v) - baseline_lnL)
 
-        print("Step 1: Determining Noise Baseline...")
+        start_s1 = time.time()
         phi_init_s1 = np.zeros(4)
         bounds_s1 = [(-15.0, 5.0), (-15.0, 5.0), (-2.0, 2.0), (-10.0, 10.0)]
-        res_s1 = optimize.fmin_l_bfgs_b(lambda p: (float(objective_step1(p)), np.array(jax.grad(objective_step1)(p))), 
-                                       phi_init_s1, bounds=bounds_s1, pgtol=1e-10)
-        q_noise, h0_fixed = phi_to_q_step1(res_s1[0])
+        x_s1, f_s1, d_s1 = optimize.fmin_l_bfgs_b(lambda p: (float(objective_step1(p)), np.array(jax.grad(objective_step1)(p))), 
+                                                 phi_init_s1, bounds=bounds_s1, pgtol=1e-10)
+        time_s1 = time.time() - start_s1
+        mem_s1 = get_memory_usage()
+        q_noise, h0_fixed = phi_to_q_step1(x_s1)
 
-        # Step 2: Physical Responses
+        report.append("Step 1: Noise Baseline (Q0, h0)")
+        report.append(f"  Runtime: {time_s1:.4f} seconds")
+        report.append(f"  Memory Usage: {mem_s1:.2f} MB")
+        report.append(f"  Iterations: {d_s1['nit']}")
+        report.append(f"  Function Calls: {d_s1['funcalls']}")
+        report.append("")
+
+        # Step 2: Physical Responses (Memory Efficient: Hybrid Hessian)
+        print("Executing Step 2...")
         @jit
         def phi_to_q_step2(phi):
             qr = q_physics_init
@@ -179,13 +184,12 @@ def main():
             q_p, h0_v = phi_to_q_step2(phi)
             return -(calc_lnL(q_p, h0_v) - baseline_lnL)
 
-        print("Step 2: Fitting Physical Models (Rain, EQ) [Delay fixed to 0]...")
-        qr = q_physics_init
+        start_s2 = time.time()
         phi_init_s2 = jnp.array([1.0, 0.0, 1.0, 0.3])
-        bounds_s2 = [(20.0/qr[2], 200.0/qr[2]), (-10.0, 10.0), (0.01, 100.0), (0.1, 30.0/qr[7])]
+        bounds_s2 = [(20.0/q_physics_init[2], 200.0/q_physics_init[2]), (-10.0, 10.0), (0.01, 100.0), (0.1, 30.0/q_physics_init[7])]
         
         # --- Hybrid Diagonal Hessian (AD + FD) ---
-        print("  Estimating Hybrid Hessian (AD+FD) for scaling...")
+        print("  Estimating Hybrid Hessian...")
         grad_fn = jax.grad(objective_step2)
         g_base = grad_fn(phi_init_s2)
         eps = 1e-4
@@ -197,7 +201,6 @@ def main():
             H_diag_list.append(h_ii)
         H_diag = jnp.abs(jnp.array(H_diag_list))
         scales = jnp.clip(1.0 / jnp.sqrt(H_diag + 1e-12), 1e-3, 1e3)
-        print(f"  Auto-scales applied: {scales}")
         
         def objective_step2_scaled(theta):
             phi = theta * scales
@@ -207,77 +210,27 @@ def main():
         theta_init = phi_init_s2 / scales
         bounds_theta = [(b[0]/s, b[1]/s) for b, s in zip(bounds_s2, scales)]
         
-        res_s2 = optimize.fmin_l_bfgs_b(objective_step2_scaled, 
-                                       np.array(theta_init), bounds=bounds_theta, pgtol=1e-10)
-        q_best, h0_best = phi_to_q_step2(res_s2[0] * scales)
-        
-        total_time = time.time() - overall_start
-        print(f"Optimization Complete in {total_time:.2f} seconds.")
-        print("-" * 40)
-        print(f"Final Params: {q_best}")
-        print(f"Final h0: {h0_best:.4e}")
+        x_s2_scaled, f_s2, d_s2 = optimize.fmin_l_bfgs_b(objective_step2_scaled, 
+                                                        np.array(theta_init), bounds=bounds_theta, pgtol=1e-10)
+        time_s2 = time.time() - start_s2
+        mem_s2 = get_memory_usage()
+        q_best, h0_best = phi_to_q_step2(x_s2_scaled * scales)
 
-        # --- Trade-off Sweep ---
-        num_steps = 31
-        steps = jnp.linspace(-1.0, 1.0, num_steps)
-        param_names = ["Q0_amp", "Q0_alpha", "Tau_rain", "Amp_rain", "Delay_rain", "at0_alpha", "Amp_eq", "Tau_eq", "h0"]
-        baseline_lnL = calc_lnL(q_best, h0_best)
-        results = []
+        report.append("Step 2: Physical Responses (Rain, EQ) [Hybrid Hessian AD+FD]")
+        report.append(f"  Runtime: {time_s2:.4f} seconds")
+        report.append(f"  Memory Usage: {mem_s2:.2f} MB")
+        report.append(f"  Iterations: {d_s2['nit']}")
+        report.append(f"  Function Calls: {d_s2['funcalls']}")
+        report.append("-" * 40)
         
-        def get_sweep_q_h0(idx, step_val):
-            q_tmp = jnp.array(q_best)
-            h0_tmp = h0_best
-            if idx in [0, 1]: q_tmp = q_tmp.at[idx].multiply(jnp.power(10.0, step_val * 2))
-            elif idx in [3, 4, 5]: q_tmp = q_tmp.at[idx].add(step_val * 5.0 * (1e-5 if idx==3 else 1.0))
-            elif idx == 8: h0_tmp = h0_tmp * jnp.power(10.0, step_val)
-            else: q_tmp = q_tmp.at[idx].multiply(jnp.power(10.0, step_val))
-            return q_tmp, h0_tmp
+        peak_mem = get_memory_usage()
+        report.append(f"Peak Process Memory: {peak_mem:.2f} MB")
+        report.append(f"Total Optimization Time: {time_s1 + time_s2:.4f} seconds")
 
-        for i in range(9):
-            lnLs = vmap(lambda s: calc_lnL(*get_sweep_q_h0(i, s)))(steps)
-            results.append(lnLs - baseline_lnL)
-        results = jnp.stack(results)
-        
-        fig = plt.figure(figsize=(18, 32))
-        gs = fig.add_gridspec(5, 3) 
-        axes = [fig.add_subplot(gs[i, j]) for i in range(3) for j in range(3)]
-        for i in range(9):
-            val_best = q_best[i] if i < 8 else h0_best
-            if i in [0, 1, 2, 6, 7, 8]:
-                sweep_vals = val_best * jnp.power(10.0, steps * (2 if i < 2 else 1))
-                axes[i].plot(sweep_vals, results[i], lw=3)
-                axes[i].set_xscale('log')
-                axes[i].set_xlabel("Value")
-            else:
-                axes[i].plot(val_best + steps * 5.0 * (1e-5 if i==3 else 1.0), results[i], lw=3)
-                axes[i].set_xlabel("Additive")
-            
-            axes[i].set_title(f"{param_names[i]}\nBest: {val_best:.2e}")
-            axes[i].axvline(val_best, color='red', ls='--')
-            axes[i].grid(True, alpha=0.3)
-            
-        dates = [klf_inst.base_date + datetime.timedelta(days=int(i)) for i in range(num_days)]
-        ax_amp = fig.add_subplot(gs[3, :])
-        beta = klf_inst.get_beta_extended(q_best, num_days)
-        alpha_t, _, _, _ = eKlf_jax(ccfs1, ccf_r_dense, ccf_deri_dense, ccf_r_orig, delta, ts, te, beta, h0_best, [q_best[0], q_best[1]], jnp.diag(jnp.array([q_best[0], q_best[1]])), jnp.array([1.0, q_best[5]]))
-        mean_A = float(jnp.nanmean(alpha_t[:, 0]))
-        ax_amp.plot(dates, alpha_t[:, 0], color='C0', label='Amplitude (A)', lw=1.0)
-        ax_amp.set_ylabel(f'Amplitude (A) [Mean: {mean_A:.3f}]')
-        ax_amp.grid(True, alpha=0.3)
-        ax_amp.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-
-        ax_dv = fig.add_subplot(gs[4, :])
-        ax_dv.plot(dates, alpha_t[:, 1], label='Residual alpha', color='C1', lw=1.5)
-        ax_dv.plot(dates, beta, label='Rain Model beta', color='C2', ls='--', lw=1.5)
-        ax_dv.plot(dates, alpha_t[:, 1] + beta, label='Total alpha+beta', color='C3', ls=':', lw=2)
-        ax_dv.set_ylabel('Velocity Change (dv/v)')
-        ax_dv.grid(True, alpha=0.3)
-        ax_dv.legend()
-        ax_dv.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))
-        
-        plt.tight_layout()
-        plt.savefig("Trade_off_jax_REVERTED_STABLE_v3.png")
-        print("Success: Final plots saved.")
+        os.makedirs("log", exist_ok=True)
+        with open("log/benchmark_wo_Hessian.txt", "w") as f:
+            f.write("\n".join(report))
+        print("Benchmark (Hybrid Hessian) complete.")
 
 if __name__ == "__main__":
     main()
